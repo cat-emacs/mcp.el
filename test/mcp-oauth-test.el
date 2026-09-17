@@ -131,11 +131,32 @@
 
 (ert-deftest mcp-oauth-test-load-rejects-unsafe-state ()
   (mcp-oauth-test-with-provider
-   (mcp-oauth--save-state provider `(:resource ,(mcp-oauth-provider-resource provider) :issuer "https://issuer.test"))
+   (mcp-oauth--save-state
+    provider `(:resource ,(mcp-oauth-provider-resource provider)
+                         :issuer "https://issuer.test"))
    (let ((file (mcp-oauth--state-file provider)))
-     (set-file-modes file #o644) (should-error (mcp-oauth--load-state provider))
-     (delete-file file) (make-symbolic-link "/dev/null" file)
-     (should-error (mcp-oauth--load-state provider)))))
+     ;; Exercise POSIX mode policy independently of the host filesystem.
+     (cl-letf (((symbol-function 'file-modes) (lambda (_) #o644))
+               ((symbol-function 'file-symlink-p) (lambda (_) nil))
+               ((symbol-function 'file-regular-p) (lambda (_) t)))
+       (let ((system-type 'gnu/linux))
+         (should-error (mcp-oauth--load-state provider))))
+     ;; Symlinks remain unsafe on every platform, including native Windows.
+     (cl-letf (((symbol-function 'file-symlink-p) (lambda (_) "target"))
+               ((symbol-function 'file-regular-p) (lambda (_) t)))
+       (should-error (mcp-oauth--load-state provider)))
+     (cl-letf (((symbol-function 'file-modes) (lambda (_) #o666))
+               ((symbol-function 'file-symlink-p) (lambda (_) nil))
+               ((symbol-function 'file-regular-p) (lambda (_) t)))
+       (let ((system-type 'windows-nt))
+         (should (mcp-oauth--state-file-safe-p file))))
+     (let ((system-type 'windows-nt))
+       (cl-letf (((symbol-function 'file-symlink-p) (lambda (_) "target"))
+                 ((symbol-function 'file-regular-p) (lambda (_) t)))
+         (should-not (mcp-oauth--state-file-safe-p file)))
+       (cl-letf (((symbol-function 'file-symlink-p) (lambda (_) nil))
+                 ((symbol-function 'file-regular-p) (lambda (_) nil)))
+         (should-not (mcp-oauth--state-file-safe-p file)))))))
 
 (ert-deftest mcp-oauth-test-single-flight-and-cancel ()
   (mcp-oauth-test-with-provider

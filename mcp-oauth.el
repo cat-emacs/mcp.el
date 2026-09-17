@@ -195,14 +195,23 @@ CONFIG accepts :client-name, :scopes, :metadata-url, :authorization-server,
     (make-directory directory t))
   (set-file-modes directory #o700))
 
+(defun mcp-oauth--state-file-safe-p (file)
+  "Return non-nil when FILE passes portable OAuth state safety checks.
+Native Windows does not expose meaningful POSIX mode bits, so retain the
+regular-file and symlink checks there without rejecting its synthetic modes."
+  (and (not (file-symlink-p file))
+       (file-regular-p file)
+       (or (eq system-type 'windows-nt)
+           (let ((modes (file-modes file)))
+             (and modes (= 0 (logand #o077 modes)))))))
+
 (defun mcp-oauth--load-state (provider)
   "Load and validate persisted OAuth state for PROVIDER."
   (let* ((file (mcp-oauth--state-file provider))
          (directory (file-name-directory file)))
     (mcp-oauth--ensure-directory directory)
     (when (file-exists-p file)
-      (when (or (file-symlink-p file) (not (file-regular-p file))
-                (/= 0 (logand #o077 (file-modes file))))
+      (unless (mcp-oauth--state-file-safe-p file)
         (error "OAuth state file is unsafe"))
       (let ((state (with-temp-buffer
                      (insert-file-contents file)
