@@ -2,12 +2,26 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'mcp-oauth)
+(require 'mcp)
 
 (defmacro mcp-oauth-test-with-provider (&rest body)
   `(let* ((directory (make-temp-file "mcp-oauth-test-" t))
           (provider (mcp-oauth-create "https://mcp.example.test/v1?tenant=a"
                                       (list :storage-directory directory :open-browser nil))))
      (unwind-protect (progn ,@body) (delete-directory directory t))))
+
+(ert-deftest mcp-oauth-test-clear-credentials-has-interactive-provider-input ()
+  (mcp-oauth-test-with-provider
+   (let (cancelled deleted)
+     (cl-letf (((symbol-function 'mcp-oauth--read-provider)
+                (lambda () provider))
+               ((symbol-function 'mcp-oauth-cancel-authorization)
+                (lambda (value) (setq cancelled value)))
+               ((symbol-function 'mcp-oauth--delete-state)
+                (lambda (value) (setq deleted value))))
+       (call-interactively #'mcp-oauth-clear-credentials)
+       (should (eq cancelled provider))
+       (should (eq deleted provider))))))
 
 (ert-deftest mcp-oauth-test-resource-keeps-query-and-rejects-fragment ()
   (should (equal (mcp-oauth-provider-resource (mcp-oauth-create "https://mcp.example.test/v1?tenant=a"))

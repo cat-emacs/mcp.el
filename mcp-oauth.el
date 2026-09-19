@@ -666,10 +666,27 @@ authorization only if no usable refresh credential remains."
   (when (mcp-oauth-provider-waiters provider)
     (mcp-oauth--finish provider nil "OAuth device authorization cancelled")))
 
+(declare-function mcp--oauth "mcp")
+(defvar mcp-server-connections)
+
+(defun mcp-oauth--read-provider ()
+  "Read an active MCP server name and return its OAuth provider."
+  (require 'mcp)
+  (let (names)
+    (maphash (lambda (name _connection) (push name names))
+             mcp-server-connections)
+    (unless names
+      (user-error "No MCP server connections are available"))
+    (let* ((name (completing-read "MCP server: " (sort names #'string<) nil t))
+           (connection (gethash name mcp-server-connections))
+           (provider (and connection (mcp--oauth connection))))
+      (or provider
+          (user-error "MCP server %s has no OAuth provider" name)))))
+
 ;;;###autoload
 (defun mcp-oauth-clear-credentials (provider)
   "Clear persisted OAuth credentials for PROVIDER."
-  (interactive)
+  (interactive (list (mcp-oauth--read-provider)))
   (mcp-oauth-cancel-authorization provider)
   (mcp-oauth--delete-state provider))
 

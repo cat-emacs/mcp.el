@@ -50,6 +50,7 @@
 (declare-function mcp-oauth-create "mcp-oauth")
 (declare-function mcp-oauth-ensure-token "mcp-oauth")
 (declare-function mcp-oauth-cancel-authorization "mcp-oauth" (provider))
+(declare-function mcp-oauth-provider-p "mcp-oauth")
 
 (defconst mcp--support-versions (list "2025-03-26" "2024-11-05")
   "MCP support version.")
